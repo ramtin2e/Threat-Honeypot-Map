@@ -1,0 +1,168 @@
+import os
+import sys
+import threading
+from flask import Flask, render_template, jsonify, Response
+
+# Add parent directory to path so we can import core and honeypots
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from core.database import Attack, get_db_session
+from core.mock_generator import start_mock_generator_thread
+from honeypots.http_trap import http_trap
+from honeypots.ssh_trap import start_ssh_honeypot
+from core.active_defense import start_active_defense
+from core.siem_forwarder import start_siem_forwarder
+
+app = Flask(__name__)
+
+# Register the HTTP honeypot routes
+app.register_blueprint(http_trap)
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/api/attacks')
+def get_attacks():
+    session = get_db_session()
+    # Get last 100 attacks
+    attacks = session.query(Attack).order_by(Attack.timestamp.desc()).limit(100).all()
+    
+    data = []
+    for a in attacks:
+        data.append({
+            'id': a.id,
+            'session_id': a.session_id,
+            'timestamp': a.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            'source_ip': a.source_ip,
+            'geo_location': a.geo_location,
+            'latitude': a.latitude,
+            'longitude': a.longitude,
+            'port': a.port,
+            'protocol': a.protocol,
+            'payload': a.payload,
+            'mitre_tags': a.mitre_tags,
+            'risk_score': a.risk_score,
+            'threat_label': a.threat_label,
+            'file_hash': a.file_hash,
+            'action_taken': a.action_taken
+        })
+        
+    session.close()
+    return jsonify(data)
+
+@app.route('/api/toggle_live', methods=['POST'])
+def toggle_live():
+    from core.threat_intel import ti_provider
+    data = request.json
+    enabled = data.get('enabled', False)
+    success = ti_provider.set_live_mode(enabled)
+    return jsonify({"success": True, "live_mode": success})
+
+@app.route('/api/stats')
+def get_stats():
+    session = get_db_session()
+    total = session.query(Attack).count()
+    
+    from sqlalchemy import text
+    
+    # Top 5 IPs
+    top_ips_query = session.execute(
+        text("SELECT source_ip, COUNT(*) as count FROM attacks GROUP BY source_ip ORDER BY count DESC LIMIT 5")
+    )
+    top_ips = [{"ip": row[0], "count": row[1]} for row in top_ips_query]
+    
+    session.close()
+    return jsonify({
+        "total_attacks": total,
+        "top_ips": top_ips
+    })
+
+@app.route('/api/sessions')
+def get_sessions():
+    session = get_db_session()
+    from sqlalchemy import text
+    # Group by session_id and count commands, get start time
+    sessions_query = session.execute(
+        text("SELECT session_id, source_ip, MIN(timestamp) as start_time, COUNT(*) as cmd_count FROM attacks WHERE protocol='SSH' GROUP BY session_id ORDER BY start_time DESC LIMIT 20")
+    )
+    sessions_data = []
+    for row in sessions_query:
+        # Get actual commands
+        cmds = session.query(Attack.payload).filter_by(session_id=row[0]).order_by(Attack.timestamp.asc()).all()
+        sessions_data.append({
+            "session_id": row[0],
+            "source_ip": row[1],
+            "start_time": row[2],
+            "cmd_count": row[3],
+            "commands": [c[0] for c in cmds]
+        })
+    session.close()
+    return jsonify(sessions_data)
+
+@app.route('/api/analytics')
+def get_analytics():
+    # Simple mock analytics for the demo
+    # We will generate a timeline of random points for the chart
+    import random
+    import datetime
+    
+    now = datetime.datetime.now()
+    labels = [(now - datetime.timedelta(hours=i)).strftime('%H:00') for i in range(24, 0, -1)]
+    
+    ssh_data = [random.randint(10, 50) for _ in range(24)]
+    http_data = [random.randint(5, 20) for _ in range(24)]
+    
+    return jsonify({
+        "labels": labels,
+        "datasets": [
+            {
+                "label": "SSH Attacks",
+                "data": ssh_data,
+                "borderColor": "#33aaff",
+                "backgroundColor": "rgba(51, 170, 255, 0.1)"
+            },
+            {
+                "label": "HTTP Attacks",
+                "data": http_data,
+                "borderColor": "#00ff88",
+                "backgroundColor": "rgba(0, 255, 136, 0.1)"
+            }
+        ]
+    })
+
+@app.route('/api/export/csv')
+def export_csv():
+    session = get_db_session()
+    attacks = session.query(Attack).order_by(Attack.timestamp.desc()).all()
+    
+    csv_data = "Timestamp,IP,GeoLocation,Protocol,Port,Payload,MITRE_Tags\n"
+    for a in attacks:
+        payload_safe = str(a.payload).replace(',', ';').replace('"', "'")
+        tags_safe = str(a.mitre_tags).replace(',', ';')
+        csv_data += f"{a.timestamp},{a.source_ip},{a.geo_location},{a.protocol},{a.port},\"{payload_safe}\",\"{tags_safe}\"\n"
+        
+    session.close()
+    
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-disposition": "attachment; filename=iocs_export.csv"}
+    )
+
+if __name__ == '__main__':
+    print("[*] Starting Mock Data Generator in background...")
+    start_mock_generator_thread()
+    
+    print("[*] Starting SSH Honeypot in background...")
+    ssh_thread = threading.Thread(target=start_ssh_honeypot, args=(2222,), daemon=True)
+    ssh_thread.start()
+    
+    print("[*] Starting Active Defense SOAR engine...")
+    start_active_defense()
+
+    print("[*] Starting SIEM Log Forwarder...")
+    start_siem_forwarder()
+    
+    print("[*] Starting Flask Dashboard and HTTP Honeypot on port 5000...")
+    app.run(host='0.0.0.0', port=5000, debug=False)

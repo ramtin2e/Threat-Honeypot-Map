@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Threat Intelligence Dashboard</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="pulse-indicator"></span>
+                <h1>Global Threat Monitor</h1>
+            </div>
+            
+            <!-- Tabs -->
+            <nav class="tabs">
+                <button class="tab-btn active" data-target="tab-live">Live Feed</button>
+                <button class="tab-btn" data-target="tab-analytics">Analytics</button>
+                <button class="tab-btn" data-target="tab-sessions">Session Replay</button>
+            </nav>
+
+            <div class="actions">
+                <div class="stat-badge" style="margin-right: 20px; align-items: center; flex-direction: row; gap: 10px;">
+                    <span class="stat-label">System Mode:</span>
+                    <label class="switch" style="position: relative; display: inline-block; width: 40px; height: 20px;">
+                        <input type="checkbox" id="live-mode-toggle" style="opacity: 0; width: 0; height: 0;">
+                        <span class="slider round" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px;"></span>
+                        <style>
+                            input:checked + .slider { background-color: var(--accent-green); }
+                            .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+                            input:checked + .slider:before { transform: translateX(20px); }
+                        </style>
+                    </label>
+                    <span id="mode-text" style="font-size: 0.75rem; color: var(--text-muted); font-weight: bold;">MOCK</span>
+                </div>
+                <div class="stat-badge">
+                    <span class="stat-label">Total Attacks</span>
+                    <span class="stat-value" id="total-attacks-counter">0</span>
+                </div>
+                <a href="/api/export/csv" class="btn btn-export">
+                    Export IOCs
+                </a>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            
+            <!-- TAB: Live Feed -->
+            <div id="tab-live" class="tab-content active tab-live-grid">
+                <!-- Map Section -->
+                <section class="panel map-panel">
+                    <div class="panel-header">
+                        <h2>Live Attack Map</h2>
+                        <span class="status-text">Monitoring 2 honeypot sensors</span>
+                    </div>
+                    <div id="map" class="map-container"></div>
+                </section>
+                
+                <section class="panel top-ips-panel">
+                    <div class="panel-header">
+                        <h2>Top Threat Actors</h2>
+                    </div>
+                    <div class="top-ips-container">
+                        <ul id="top-ips-list" class="top-ips-list"></ul>
+                    </div>
+                </section>
+                
+                <section class="panel mitre-panel">
+                    <div class="panel-header">
+                        <h2>MITRE ATT&CK Matrix</h2>
+                    </div>
+                    <div class="mitre-summary">
+                        <ul id="mitre-list" class="mitre-list"></ul>
+                    </div>
+                </section>
+                
+                <!-- Live Feed Section -->
+                <section class="panel feed-panel">
+                    <div class="panel-header">
+                        <h2>Live Event Feed</h2>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Source IP</th>
+                                    <th>Geo</th>
+                                    <th>Risk</th>
+                                    <th>Action</th>
+                                    <th>Proto</th>
+                                    <th>Payload / Hash</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attack-feed-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- TAB: Analytics -->
+            <div id="tab-analytics" class="tab-content">
+                <section class="panel">
+                    <div class="panel-header">
+                        <h2>Attack Volume (24h)</h2>
+                    </div>
+                    <div style="padding: 20px; height: 400px;">
+                        <canvas id="analyticsChart"></canvas>
+                    </div>
+                </section>
+            </div>
+
+            <!-- TAB: Session Replay -->
+            <div id="tab-sessions" class="tab-content tab-sessions-grid">
+                <section class="panel">
+                    <div class="panel-header">
+                        <h2>Captured Sessions</h2>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>IP Address</th>
+                                    <th>Commands</th>
+                                    <th>Start Time</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sessions-list-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <section class="panel terminal-panel">
+                    <div class="panel-header">
+                        <h2>Terminal Replay</h2>
+                    </div>
+                    <div id="terminal-replay" class="terminal-window">
+                        Select a session to replay...
+                    </div>
+                </section>
+            </div>
+            
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Leaflet.curve plugin -->
+    <script src="https://elfalem.github.io/Leaflet.curve/src/leaflet.curve.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
