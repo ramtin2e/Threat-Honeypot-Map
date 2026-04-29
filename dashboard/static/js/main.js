@@ -230,24 +230,52 @@ function playTerminal(commands) {
 
 // --- CHART.JS LOGIC ---
 let analyticsChart = null;
+let riskTrendChart = null;
+let mitreChart = null;
+
 function initChart() {
     fetch('/api/analytics').then(res => res.json()).then(data => {
-        const ctx = document.getElementById('analyticsChart').getContext('2d');
         if(analyticsChart) analyticsChart.destroy();
+        if(riskTrendChart) riskTrendChart.destroy();
+        if(mitreChart) mitreChart.destroy();
         
-        analyticsChart = new Chart(ctx, {
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888' } },
+                x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888' } }
+            },
+            plugins: {
+                legend: { labels: { color: '#f0f0f5' } }
+            }
+        };
+
+        const ctxVol = document.getElementById('analyticsChart').getContext('2d');
+        analyticsChart = new Chart(ctxVol, {
             type: 'line',
-            data: data,
+            data: data.timeline,
+            options: commonOptions
+        });
+
+        const ctxRisk = document.getElementById('riskTrendChart').getContext('2d');
+        riskTrendChart = new Chart(ctxRisk, {
+            type: 'line',
+            data: data.risk_trend,
+            options: commonOptions
+        });
+
+        const ctxMitre = document.getElementById('mitreChart').getContext('2d');
+        mitreChart = new Chart(ctxMitre, {
+            type: 'bar',
+            data: data.mitre_tactics,
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
-                    x: { grid: { color: 'rgba(255,255,255,0.05)' } }
+                responsive: true, maintainAspectRatio: false,
+                scales: { 
+                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888' } }, 
+                    x: { grid: { display: false }, ticks: { color: '#888' } } 
                 },
-                plugins: {
-                    legend: { labels: { color: '#f0f0f5' } }
-                }
+                plugins: { legend: { display: false } }
             }
         });
     });

@@ -112,14 +112,34 @@
 
             <!-- TAB: Analytics -->
             <div id="tab-analytics" class="tab-content">
-                <section class="panel">
-                    <div class="panel-header">
-                        <h2>Attack Volume (24h)</h2>
-                    </div>
-                    <div style="padding: 20px; height: 400px;">
-                        <canvas id="analyticsChart"></canvas>
-                    </div>
-                </section>
+                <div class="analytics-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <section class="panel" style="grid-column: 1 / -1;">
+                        <div class="panel-header">
+                            <h2>Attack Volume (24h)</h2>
+                        </div>
+                        <div style="padding: 20px; height: 300px;">
+                            <canvas id="analyticsChart"></canvas>
+                        </div>
+                    </section>
+                    
+                    <section class="panel">
+                        <div class="panel-header">
+                            <h2>Risk Score Trend</h2>
+                        </div>
+                        <div style="padding: 20px; height: 250px;">
+                            <canvas id="riskTrendChart"></canvas>
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <div class="panel-header">
+                            <h2>MITRE Tactics Breakdown</h2>
+                        </div>
+                        <div style="padding: 20px; height: 250px;">
+                            <canvas id="mitreChart"></canvas>
+                        </div>
+                    </section>
+                </div>
             </div>
 
             <!-- TAB: Session Replay -->
