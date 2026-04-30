@@ -117,7 +117,6 @@ def get_analytics():
     risk_counts = [0] * 24
 
     mitre_counts = {}
-    action_counts = {"BLOCKED": 0, "LOGGED": 0, "RATE_LIMITED": 0}
     
     for a in attacks:
         if a.mitre_tags:
@@ -126,8 +125,6 @@ def get_analytics():
                 if t:
                     mitre_counts[t] = mitre_counts.get(t, 0) + 1
         
-        act = a.action_taken or "LOGGED"
-        action_counts[act] = action_counts.get(act, 0) + 1
         
         try:
             delta = now - a.timestamp
@@ -158,7 +155,7 @@ def get_analytics():
         avg_risk_data = [random.randint(30, 80) for _ in range(24)]
         mitre_labels = ["T1110", "T1190", "T1046", "T1059", "T1082"]
         mitre_data = [random.randint(20, 100) for _ in range(5)]
-        action_counts = {"BLOCKED": random.randint(100, 300), "LOGGED": random.randint(50, 150), "RATE_LIMITED": random.randint(20, 80)}
+
 
     session.close()
 
@@ -197,13 +194,6 @@ def get_analytics():
                 "label": "Frequency",
                 "data": mitre_data,
                 "backgroundColor": ["rgba(51, 170, 255, 0.6)", "rgba(0, 255, 136, 0.6)", "rgba(255, 51, 102, 0.6)", "rgba(255, 204, 0, 0.6)", "rgba(153, 102, 255, 0.6)"]
-            }]
-        },
-        "action_effectiveness": {
-            "labels": list(action_counts.keys()),
-            "datasets": [{
-                "data": list(action_counts.values()),
-                "backgroundColor": ["#ff3366", "#33aaff", "#00ff88"]
             }]
         }
     })
